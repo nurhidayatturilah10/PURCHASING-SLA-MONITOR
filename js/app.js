@@ -32,7 +32,7 @@
   var FILTER0 = { from: "", to: "", jenis: "", src: "", sup: "", alok: "", q: "" };
   var S = {
     sla: Object.assign({}, X.SLA_AWAL, SLA_EXTRA, ls.get("psla-sla", {})), ref: ls.get("psla-ref", ""),
-    f: Object.assign({}, FILTER0), hapusKonfirm: "", resetU: "", pesan: null, page: "menu", tab: "tindak", hal: 1, par: "", tabT: "belum", halT: 1, tabA: "lewat", halA: 1, bunyi: ls.get("psla-bunyi", false), notif: ls.get("psla-notif", false), trmMsg: "",
+    f: Object.assign({}, FILTER0), hapusKonfirm: "", resetU: "", pesan: null, page: "menu", tab: "tindak", hal: 1, par: "", tabT: "belum", halT: 1, tabA: "lewat", halA: 1, notifBuka: false, bunyi: ls.get("psla-bunyi", false), notif: ls.get("psla-notif", false), trmMsg: "",
     urut: { sup: { k: "n", asc: false }, alok: { k: "open", asc: false } }
   };
   var D = null, C = {}; // D = data, C = hasil hitung
@@ -241,28 +241,17 @@
     document.querySelectorAll("[data-ic]").forEach(function (el) { el.innerHTML = ikon(el.dataset.ic); });
   }
   function renderMenu() {
-    var R = C.R, s = S.sla, tind = R.lewat + R.tungguTelat, pDel = X.persen(R.delOk, R.delN), me = Auth.me();
-    var live = {
-      ringkasan: nf.format(R.n) + " item · " + pct(X.persen(R.done, R.n)) + " diterima",
-      tren: "Tepat waktu " + pct(pDel),
-      tindak: tind ? '<span class="bad">' + nf.format(tind) + " perlu tindakan</span>" : '<span class="good">Semua sesuai jadwal</span>',
-      supplier: nf.format(C.sup.length) + " supplier",
-      toko: nf.format(C.tok.length) + " toko",
-      atur: "Persetujuan " + s.app + " hari · PO " + s.po + " hari",
-      alarm: (function () { var a = C.alarm; var n = a.lewat.length + a.toko.length; return n ? '<span class="bad">' + nf.format(n) + " alarm aktif</span>" : '<span class="good">Tidak ada alarm</span>'; })(),
-      terima: (function () { var t = hitungTerima(); return t.siap ? '<span class="bad">' + nf.format(t.siap) + " menunggu centang toko</span>" : '<span class="good">Semua sudah dicentang</span>'; })(),
-      pengguna: nf.format(Auth.list().length) + " akun",
-      akun: me ? esc(me.name) : ""
-    };
-    $("#tiles").innerHTML = HALAMAN.filter(function (h) { return h.k !== "menu" && boleh(h); }).map(function (h) {
-      return '<a class="tile" href="#' + h.k + '"><span class="ic">' + ikon(h.k) + "</span><h3>" + h.t + "</h3><p>" + h.d + '</p><div class="live num">' + live[h.k] + "</div></a>";
-    }).join("");
-    var adm = Auth.isAdmin(), t = hitungTerima(), ak = Auth.list();
-    $("#menuHead").innerHTML = adm
-      ? '<div class="mh"><div><h3>Panel admin</h3><p>' + nf.format(ak.length) + " akun · " + nf.format(ak.filter(function (a) { return a.must || a.weak; }).length) + ' perlu ganti password · batas SLA persetujuan ' + s.app + " hari, PO " + s.po + ' hari</p></div><a class="btn pri" href="#pengguna">Kelola pengguna</a></div>'
-      : '<div class="mh"><div><h3>Tugas Anda: centang penerimaan</h3><p>' + (t.siap ? nf.format(t.siap) + " barang sudah di gudang dan menunggu dicentang tim toko." : "Tidak ada barang yang menunggu dicentang.") + '</p></div><a class="btn pri" href="#terima">Buka penerimaan</a></div>';
     var ba = $("#navBadgeA"), na = C.alarm ? C.alarm.lewat.length + C.alarm.toko.length : 0; if (ba) { ba.hidden = !na; ba.textContent = na > 999 ? "999+" : na; }
-    var b = $("#navBadge"); if (b) { b.hidden = !tind; b.textContent = tind > 999 ? "999+" : tind; }
+    var R = C.R, tind = R ? R.lewat + R.tungguTelat : 0, b = $("#navBadge"); if (b) { b.hidden = !tind; b.textContent = tind > 999 ? "999+" : tind; }
+  }
+  /* satu tombol ringkas di halaman utama; klik untuk membuka rincian pemberitahuan */
+  function renderNotif() {
+    var me = Auth.me(), btn = $("#btnNotifBuka"), pan = $("#notifPanel"); if (!btn) return;
+    var n = (!$("#warnbar").hidden ? 1 : 0) + (!$("#alarmbar").hidden ? 1 : 0);
+    btn.hidden = !me || !n; $("#notifAman").hidden = !me || n > 0; $("#notifN").textContent = n;
+    if (!n) S.notifBuka = false;
+    pan.hidden = !(me && n && S.notifBuka); btn.setAttribute("aria-expanded", !pan.hidden);
+    $("#roleband").hidden = !me || pan.hidden;
   }
   function route() {
     var me = Auth.me(); if (!me || !D) return;
@@ -354,12 +343,12 @@
   }
   function renderAlarmBar() {
     var bar = $("#alarmbar"), A = C.alarm, me = Auth.me();
-    if (!me || !A || me.must || (A.lewat.length + A.toko.length + A.segera.length) === 0) { bar.hidden = true; return; }
+    if (!me || !A || me.must || (A.lewat.length + A.toko.length + A.segera.length) === 0) { bar.hidden = true; renderNotif(); return; }
     var bagian = [];
     if (A.lewat.length) bagian.push(nf.format(A.lewat.length) + " lewat jatuh tempo");
     if (A.toko.length) bagian.push(nf.format(A.toko.length) + " belum diterima toko");
     if (A.segera.length) bagian.push(nf.format(A.segera.length) + " segera jatuh tempo");
-    bar.hidden = false; bar.innerHTML = '<div><b>Alarm</b><span>' + bagian.join(" · ") + (Object.keys(S.f).some(function (k) { return S.f[k] !== ""; }) ? " (sesuai filter)" : "") + '</span><a href="#alarm">Lihat daftar</a></div>';
+    bar.hidden = false; bar.innerHTML = '<div><b>Alarm</b><span>' + bagian.join(" · ") + (Object.keys(S.f).some(function (k) { return S.f[k] !== ""; }) ? " (sesuai filter)" : "") + '</span><a href="#alarm">Lihat daftar</a></div>'; renderNotif();
   }
   /* nada peringatan: sirene dua nada untuk lewat jatuh tempo, tiga bip lembut untuk segera jatuh tempo */
   var bisaUcap = function () { return !!(window.speechSynthesis && window.SpeechSynthesisUtterance); };
@@ -534,6 +523,7 @@
     if (me.must) { wb.hidden = false; wb.innerHTML = '<div>Akun Anda baru dibuat atau direset. <b>Ganti password dulu</b> sebelum memakai aplikasi.</div>'; }
     else if (me.weak) { wb.hidden = false; wb.innerHTML = '<div>Password bawaan masih dipakai dan mudah ditebak. <a href="#akun">Ganti sekarang</a>.</div>'; }
     else wb.hidden = true;
+    renderNotif();
   }
   async function masuk(segar) {
     var me = Auth.me(); if (!me) { tampilLogin(); return; }
@@ -551,7 +541,7 @@
     if (segar && !me.must && location.hash !== "#menu") history.replaceState(null, "", "#menu");
     route();
   }
-  function keluar() { Auth.logout(); tutupRincian(); S.pesan = null; S.resetU = ""; history.replaceState(null, "", location.pathname + location.search); S.page = ""; renderWho(); tampilLogin(); }
+  function keluar() { S.notifBuka = false; Auth.logout(); tutupRincian(); S.pesan = null; S.resetU = ""; history.replaceState(null, "", location.pathname + location.search); S.page = ""; renderWho(); tampilLogin(); }
 
   function pesanHtml() { return S.pesan ? '<p class="msg ' + S.pesan.tone + '" role="status">' + esc(S.pesan.t) + "</p>" : '<p class="msg"></p>'; }
   var setPesan = function (t, tone) { S.pesan = t ? { t: t, tone: tone || "good" } : null; };
@@ -607,7 +597,7 @@
         if (b !== $("#gpUlang").value) { setPesan("Password baru dan ulangannya tidak sama.", "bad"); renderAkun(); return; }
         var lama = $("#gpLama").value, wasMust = Auth.me().must;
         try { await Auth.changePw(lama, b); setPesan("Password diganti.", "good"); } catch (x) { setPesan(x && x.user ? x.message : "Gagal: " + (x && x.message || x), "bad"); renderAkun(); return; }
-        renderWho(); document.body.classList.remove("must"); buatNav(); renderMenu();
+        renderWho(); document.body.classList.remove("must"); buatNav(); renderMenu(); renderAlarmBar();
         if (wasMust) { S.pesan = null; history.replaceState(null, "", "#menu"); route(); } else renderAkun();
       }
     });
@@ -628,6 +618,7 @@
       var t = e.target, el;
       if (t.closest("#auShow")) return;
       if ((el = t.closest("[data-tt]"))) { S.tabT = el.dataset.tt; S.halT = 1; renderTerima(); return; }
+      if (t.closest("#btnNotifBuka")) { S.notifBuka = !S.notifBuka; renderNotif(); return; }
       if (t.closest("#btnNotif")) {
         var nm = $("#notifMsg");
         if (S.notif) { S.notif = false; ls.set("psla-notif", false); renderAlarm(); return; }

@@ -36,9 +36,6 @@
     </div>
   </div>
 </header>
-<div class="roleband" id="roleband" hidden></div>
-<div class="warnbar" id="warnbar" hidden></div>
-<div class="alarmbar" id="alarmbar" hidden></div>
 
 <main class="gutter">
   <div id="muat" class="kosong">Memuat data pengadaan…</div>
@@ -57,9 +54,15 @@
   </section>
 
   <section class="page" data-page="menu" hidden>
-    <div class="ph"><h2>Menu</h2><p>Pilih satu menu. Setiap menu membuka halamannya sendiri.</p></div>
-    <div id="menuHead"></div>
-    <div class="tiles" id="tiles"></div>
+    <div class="notif" id="notif">
+      <button class="notif-btn" id="btnNotifBuka" type="button" aria-expanded="false" aria-controls="notifPanel" hidden><span class="notif-dot" aria-hidden="true"></span><span>Ada yang perlu dilihat</span><b class="notif-n num" id="notifN"></b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <p class="notif-aman" id="notifAman" hidden>Tidak ada yang perlu dilihat.</p>
+      <div class="notif-panel" id="notifPanel" hidden>
+        <div class="roleband" id="roleband" hidden></div>
+        <div class="warnbar" id="warnbar" hidden></div>
+        <div class="alarmbar" id="alarmbar" hidden></div>
+      </div>
+    </div>
   </section>
 
   <section class="page" data-page="ringkasan" data-data="1" hidden>
