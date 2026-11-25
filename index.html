@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Purchasing SLA Monitor</title>
+<meta name="description" content="Pantau siklus pengadaan dari permintaan cabang (PAR) sampai barang diterima gudang, lengkap dengan SLA tiap tahap.">
+<meta name="author" content="NURHIDAYAT TURILAH - Branch Fixed Asset Administrator">
+<meta name="theme-color" content="#0b6e77">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="icon" type="image/png" href="img/favicon.png">
+<link rel="apple-touch-icon" href="img/logo.jpg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="locked">
+<div id="authHost" class="auth" hidden></div>
+<nav class="rail" id="rail" aria-label="Menu utama"></nav>
+
+<header class="top">
+  <div class="gutter">
+    <div class="brand">
+      <img class="logo" src="img/logo.jpg" width="56" height="56" alt="Logo Branch Palu">
+      <div>
+        <div class="cabang" id="cabang">Memuat…</div>
+        <h1>Purchasing SLA Monitor</h1>
+        <p class="sub" id="periode">Dari permintaan cabang (PAR) sampai barang diterima gudang</p>
+      </div>
+    </div>
+    <div class="info">
+      <span class="pill num" id="infoLaporan"></span>
+      <span class="pill num" id="infoAcuan"></span>
+      <a class="pill who" id="whoami" href="#akun" hidden></a>
+      <button class="btn sm" id="btnKeluar" hidden>Keluar</button>
+    </div>
+  </div>
+</header>
+<div class="roleband" id="roleband" hidden></div>
+<div class="warnbar" id="warnbar" hidden></div>
+<div class="alarmbar" id="alarmbar" hidden></div>
+
+<main class="gutter">
+  <div id="muat" class="kosong">Memuat data pengadaan…</div>
+
+  <section class="filter" id="filter" aria-label="Filter" hidden>
+    <div class="grid">
+      <label class="field" for="fFrom">Dari bulan PAR<select id="fFrom"></select></label>
+      <label class="field" for="fTo">Sampai bulan<select id="fTo"></select></label>
+      <label class="field" for="fJenis">Jenis<select id="fJenis"><option value="">Semua</option><option value="FAA">FAA (aktiva tetap)</option><option value="OSA">OSA (habis pakai)</option></select></label>
+      <label class="field" for="fSrc">Sumber<select id="fSrc"></select></label>
+      <label class="field" for="fSup">Supplier<select id="fSup"></select></label>
+      <label class="field" for="fAlok">Toko tujuan<select id="fAlok"></select></label>
+      <label class="field cari" for="fQ">Cari PAR, PO, LPB, atau barang<input id="fQ" type="search" placeholder="contoh: 2606/SO2V atau MILK JUG"></label>
+    </div>
+    <div class="aktif" id="aktif" hidden></div>
+  </section>
+
+  <section class="page" data-page="menu" hidden>
+    <div class="ph"><h2>Menu</h2><p>Pilih satu menu. Setiap menu membuka halamannya sendiri.</p></div>
+    <div id="menuHead"></div>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section class="page" data-page="ringkasan" data-data="1" hidden>
+    <div class="ph"><a class="back" href="#menu">← Menu</a><h2><span data-ic="ringkasan"></span>Ringkasan</h2><p>Angka utama pengadaan dan posisi tiap item di alur.</p></div>
+    <div class="kosong kosong-msg">Tidak ada data untuk kombinasi filter ini. Longgarkan filter di atas.</div>
+    <div class="konten">
+      <section class="kpis" id="kpi" aria-label="Ringkasan"></section>
+      <section class="card"><div class="hd"><div><h2>Alur pengadaan</h2><p class="note">Berapa item yang sudah sampai di tiap tahap, dan lama median tahap itu.</p></div></div><ol class="alur" id="alur"></ol></section>
+    </div>
+  </section>
+
+  <section class="page" data-page="tren" data-data="1" hidden>
+    <div class="ph"><a class="back" href="#menu">← Menu</a><h2><span data-ic="tren"></span>Grafik dan Tren</h2><p>Kepatuhan SLA per bulan, per tahap, dan sebaran keterlambatan.</p></div>
+    <div class="kosong kosong-msg">Tidak ada data untuk kombinasi filter ini. Longgarkan filter di atas.</div>
+    <div class="konten">
+      <section class="card"><div class="hd"><div><h2>Tepat waktu per bulan PAR</h2><p class="note">Batang: jumlah item pesanan. Garis: persen item yang diterima paling lambat di tanggal target (bulan dengan kurang dari 10 item diterima tidak digambar).</p></div></div><div class="chart" id="tren"></div></section>
+      <section class="tahap" id="tahap" aria-label="Kinerja per tahap"></section>
+      <section class="card"><div class="hd"><div><h2>Selisih tanggal terima dengan target kirim</h2><p class="note">Hijau: sampai lebih awal atau tepat. Kuning dan merah: terlambat. Hanya item yang sudah diterima.</p></div></div><div class="chart" id="seb"></div></section>
+    </div>
+  </section>
+
+  <section class="page" data-page="tindak" data-data="1" hidden>
+    <div class="ph"><a class="back" href="#menu">← Menu</a><h2><span data-ic="tindak"></span>Tindak Lanjut</h2><p>Item yang perlu dikejar, urut dari yang paling mendesak.</p></div>
+    <div class="kosong kosong-msg">Tidak ada data untuk kombinasi filter ini. Longgarkan filter di atas.</div>
+    <div class="konten">
+      <section class="card">
+        <div class="hd"><div><h2>Daftar tindak lanjut</h2><p class="note">Klik satu baris untuk melihat jejak PAR-nya.</p></div><button class="btn" id="btnEkspor">Unduh CSV</button></div>
+        <div class="tabs" id="tabs" role="tablist"></div>
+        <div id="kerja"></div>
+      </section>
+    </div>
+  </section>
+
+  <section class="page" data-page="supplier" data-data="1" hidden>
+    <div class="ph"><a class="back" href="#menu">← Menu</a><h2><span data-ic="supplier"></span>Supplier</h2><p>Ketepatan dan keterlambatan tiap supplier. Klik nama untuk memfilter.</p></div>
+    <div class="kosong kosong-msg">Tidak ada data untuk kombinasi filter ini. Longgarkan filter di atas.</div>
+    <div class="konten" id="grupSup"></div>
+  </section>
+
+  <section class="page" data-page="toko" data-data="1" hidden>
+    <div class="ph"><a class="back" href="#menu">← Menu</a><h2><span data-ic="toko"></span>Toko Tujuan</h2><p>Barang yang menuju tiap toko. Toko dengan barang terbuka terbanyak ada di atas.</p></div>
+    <div class="kosong kosong-msg">Tidak ada data untuk kombinasi filter ini. Longgarkan filter di atas.</div>
+    <div class="konten" id="grupTok"></div>
+  </section>
+
+  <section class="page" data-page="pengguna" hidden>
+    <div class="ph"><a class="back" href="#menu">← Menu</a><h2><span data-ic="pengguna"></span>Pengguna</h2><p>Tambah admin dan pengguna, reset password, atau ubah peran.</p></div>
+    <div id="penIsi"></div>
+  </section>
+
+  <section class="page" data-page="akun" hidden>
+    <div class="ph"><a class="back" href="#menu" id="akunBack">← Menu</a><h2><span data-ic="akun"></span>Akun Saya</h2><p>Lihat peran Anda dan ganti password.</p></div>
+    <div id="akunIsi"></div>
+  </section>
+
+  <section class="page" data-page="terima" data-data="1" hidden>
+    <div class="ph"><a class="back" href="#menu">← Menu</a><h2><span data-ic="terima"></span>Penerimaan Barang</h2><p>Centang saat barang sudah diterima gudang, lalu saat sudah sampai di toko. Filter toko dan pencarian di atas ikut berlaku.</p></div>
+    <div class="kosong kosong-msg">Tidak ada data untuk kombinasi filter ini. Longgarkan filter di atas.</div>
+    <div class="konten">
+      <section class="card">
+        <div class="tabs" id="tabsT" role="tablist"></div>
+        <div id="terimaList"></div>
+      </section>
+    </div>
+  </section>
+
+  <section class="page" data-page="alarm" data-data="1" hidden>
+    <div class="ph"><a class="back" href="#menu">← Menu</a><h2><span data-ic="alarm"></span>Alarm Jatuh Tempo</h2><p>Barang yang lewat target kirim, hampir jatuh tempo, atau sudah di gudang tetapi belum dicentang diterima toko. Bisa langsung dicentang di sini.</p></div>
+    <div class="kosong kosong-msg">Tidak ada data untuk kombinasi filter ini. Longgarkan filter di atas.</div>
+    <div class="konten">
+      <section class="card">
+        <div class="hd"><div><h2>Daftar alarm</h2><p class="note" id="alarmAturan"></p></div><div class="aksi"><button class="btn sm" id="btnUji" title="Dengarkan nada peringatan">Uji nada</button><button class="btn sm" id="btnBunyi" aria-pressed="false">Bunyi alarm: mati</button><button class="btn sm" id="btnNotif" aria-pressed="false">Notifikasi: mati</button></div></div>
+        <p class="note" id="notifMsg" role="status">Alarm berbunyi, bergetar (HP), dan memberi notifikasi selama aplikasi terbuka di browser, di HP maupun komputer. Aplikasi yang sudah ditutup tidak dapat membunyikan alarm.</p>
+        <div class="tabs" id="tabsA" role="tablist"></div>
+        <div id="alarmList"></div>
+      </section>
+    </div>
+  </section>
+
+  <section class="page" data-page="atur" hidden>
+    <div class="ph"><a class="back" href="#menu">← Menu</a><h2><span data-ic="atur"></span>Atur SLA</h2><p>Ubah batas waktu tiap tahap. Semua halaman ikut dihitung ulang.</p></div>
+    <section class="card">
+      <div class="atur-grid">
+        <label class="field" for="sApp">Persetujuan PAR (hari)<input id="sApp" class="num" type="number" min="1" max="365"></label>
+        <label class="field" for="sPo">Penerbitan PO (hari)<input id="sPo" class="num" type="number" min="1" max="365"></label>
+        <label class="field" for="sTot">Total PAR ke LPB (hari)<input id="sTot" class="num" type="number" min="1" max="365"></label>
+        <label class="field" for="sTarget">Target tepat waktu (%)<input id="sTarget" class="num" type="number" min="1" max="100"></label>
+        <label class="field" for="sToko">Alarm toko: mulai setelah gudang (hari)<input id="sToko" class="num" type="number" min="1" max="365"></label>
+        <label class="field" for="sArsip">Alarm toko: abaikan yang lebih lama dari (hari)<input id="sArsip" class="num" type="number" min="2" max="3650"></label>
+        <label class="field" for="sRef">Tanggal acuan<input id="sRef" class="num" type="date"></label>
+        <div style="display:flex;align-items:flex-end"><button class="btn" id="btnReset">Kembalikan awal</button></div>
+      </div>
+      <p class="note" id="aturMsg" style="margin-top:12px"></p>
+      <p class="note" style="margin-top:12px">Tanggal acuan menentukan barang yang belum datang dianggap terlambat atau belum. Isi dengan hari ini untuk pantauan berjalan. Pengaturan disimpan di browser ini.</p>
+    </section>
+  </section>
+</main>
+
+<footer class="foot"><div class="gutter">SLA dihitung dari tanggal PAR, persetujuan, PO, target kirim, dan penerimaan LPB pada laporan sistem.</div></footer>
+<div class="copy" id="copyright"><span class="c1">© 2026 NURHIDAYAT TURILAH</span><span class="c2">Branch Fixed Asset Administrator</span></div>
+<div id="rincian"></div>
+
+<script src="data/data.js"></script>
+<script src="js/sla.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
