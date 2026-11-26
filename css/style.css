@@ -337,3 +337,23 @@ body[data-role="user"] .tile h3 { font-size: 16px; }
 .notif-panel > div[hidden] { display: none; }
 .notif-panel > div > div { max-width: none; margin: 0; padding: 12px 16px; font-size: 14px; }
 .notif-panel .roleband > div { font-size: 13px; }
+
+/* unggah data */
+.sr { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.drop { display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center; text-align: center; padding: 26px 16px; border: 2px dashed var(--accent-line); border-radius: 12px; background: var(--accent-soft); color: var(--ink); cursor: pointer; }
+.drop:hover, .drop.over { border-color: var(--accent); }
+.drop b { color: var(--accent); font-size: 15px; }
+.drop span { font-size: 12.5px; color: var(--mute); }
+.up-list { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.up-file { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface); }
+.up-file b { word-break: break-word; }
+.up-file details { margin-top: 6px; font-size: 12.5px; color: var(--mute); }
+.up-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 12px 0; }
+.up-stats div { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--surface); }
+.up-stats b { display: block; font-size: 20px; }
+.up-stats span { font-size: 12px; color: var(--mute); }
+.up-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin-top: 8px; cursor: pointer; background: var(--surface); }
+.up-opt input { margin-top: 3px; }
+.up-opt small { display: block; color: var(--mute); }
+.up-opt.on { border-color: var(--accent); background: var(--accent-soft); }
+.up-bad { color: var(--bad); }

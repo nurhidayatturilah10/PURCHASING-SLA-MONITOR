@@ -32,7 +32,7 @@
   var FILTER0 = { from: "", to: "", jenis: "", src: "", sup: "", alok: "", q: "" };
   var S = {
     sla: Object.assign({}, X.SLA_AWAL, SLA_EXTRA, ls.get("psla-sla", {})), ref: ls.get("psla-ref", ""),
-    f: Object.assign({}, FILTER0), hapusKonfirm: "", resetU: "", pesan: null, page: "menu", tab: "tindak", hal: 1, par: "", tabT: "belum", halT: 1, tabA: "lewat", halA: 1, notifBuka: false, bunyi: ls.get("psla-bunyi", false), notif: ls.get("psla-notif", false), trmMsg: "",
+    f: Object.assign({}, FILTER0), hapusKonfirm: "", ghMsg: null, resetU: "", pesan: null, page: "menu", tab: "tindak", hal: 1, par: "", tabT: "belum", halT: 1, tabA: "lewat", halA: 1, notifBuka: false, bunyi: ls.get("psla-bunyi", false), notif: ls.get("psla-notif", false), trmMsg: "",
     urut: { sup: { k: "n", asc: false }, alok: { k: "open", asc: false } }
   };
   var D = null, C = {}; // D = data, C = hasil hitung
@@ -215,6 +215,7 @@
     pengguna: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.2a4.6 4.6 0 0 1 4.5 4.8"/>',
     terima: '<rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M8 12.2l2.7 2.8L16 9.4"/>',
     alarm: '<path d="M6 17h12l-1.5-2.2V10a4.5 4.5 0 0 0-9 0v4.8z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+    data: '<path d="M12 16V5M7.5 9.5L12 5l4.5 4.5"/><path d="M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/>',
     akun: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
     kunci: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'
   };
@@ -229,6 +230,7 @@
     { k: "supplier", nav: "Supplier", t: "Supplier", d: "Siapa yang tepat dan siapa yang telat" },
     { k: "toko", nav: "Toko", t: "Toko Tujuan", d: "Barang yang menuju tiap toko" },
     { k: "atur", nav: "SLA", t: "Atur SLA", d: "Ubah batas waktu tiap tahap", izin: "admin" },
+    { k: "data", nav: "Data", t: "Unggah Data", d: "Perbarui data dari laporan PAR", izin: "admin" },
     { k: "pengguna", nav: "Pengguna", t: "Pengguna", d: "Tambah admin dan pengguna", izin: "admin" },
     { k: "akun", nav: null, t: "Akun Saya", d: "Ganti password dan lihat peran" }
   ];
@@ -266,6 +268,7 @@
     if (h === "tren" && C.R) renderGrafik();
     if (h === "terima") renderTerima();
     if (h === "alarm") renderAlarm();
+    if (h === "data") renderData();
     if (h === "pengguna") renderPengguna(true);
     if (h === "akun") renderAkun();
     if (ganti) window.scrollTo(0, 0);
@@ -536,6 +539,7 @@
       for (var q = 0; q < ids.length; q++) if (!(t0[ids[q]] && t0[ids[q]].k)) await Auth.terimaSet(ids[q], { g: (t0[ids[q]] || {}).g || null, k: lama[ids[q]] });
       if (ids.length) ls.set("psla-serah", {});
     } catch (e) {}
+    if (Auth.mode === "db") { try { var sv2 = await muatTersimpan(true); if (sv2) pasangDataset(sv2.arr, sv2.info); } catch (e) {} }
     S.f = Object.assign({}, FILTER0); S.tab = "tindak"; S.tabT = "belum"; S.halT = 1; S.tabA = "lewat"; S.halA = 1; S.trmMsg = ""; S.hal = 1; S.page = ""; sinkronFilter(); sinkronAtur();
     buatNav(); renderWho(); $("#btnEkspor").hidden = !Auth.isAdmin(); renderSemua(); renderAlarmBar(); if ((S.bunyi || S.notif) && !me.must) kabari(jenisAlarm()); pasangPengingat();
     if (segar && !me.must && location.hash !== "#menu") history.replaceState(null, "", "#menu");
@@ -649,14 +653,269 @@
     });
   }
 
+  /* ---------- unggah data: baca laporan, pratinjau, terapkan ---------- */
+  var UP = window.Unggah, BASE = null, RAW = null, dsId = null, assetsH = null;
+  var U = { files: [], errs: [], json: null, mode: "laporan", touched: false, ack: false, busy: false, msg: "", merge: null, result: null, by: "" };
+  function idb() { return new Promise(function (ok, no) { try { var r = indexedDB.open("psla-lokal", 1); r.onupgradeneeded = function () { r.result.createObjectStore("kv"); }; r.onsuccess = function () { ok(r.result); }; r.onerror = function () { no(r.error); }; } catch (e) { no(e); } }); }
+  async function idbGet(k) { var d = await idb(); return new Promise(function (ok, no) { var r = d.transaction("kv").objectStore("kv").get(k); r.onsuccess = function () { ok(r.result); }; r.onerror = function () { no(r.error); }; }); }
+  async function idbSet(k, v) { var d = await idb(); return new Promise(function (ok, no) { var t = d.transaction("kv", "readwrite"); if (v === undefined) t.objectStore("kv")["delete"](k); else t.objectStore("kv").put(v, k); t.oncomplete = ok; t.onerror = function () { no(t.error); }; }); }
+  async function muatTersimpan(lewatiSama) {
+    if (Auth.mode === "db" && Auth.db()) {
+      var d = await Auth.db().collection("config").doc("dataset").get(), c = d && d.exists ? d.data() : null;
+      if (!c || !c.assetId) return null; if (lewatiSama && c.assetId === dsId) return null;
+      var r = await fetch("/_blob/" + c.assetId); if (!r.ok) throw new Error("HTTP " + r.status);
+      return { arr: await r.json(), info: { sumber: "bersama", at: c.ts, by: c.by, assetId: c.assetId } };
+    }
+    var sv = await idbGet("dataset"); if (!sv || !sv.arr) return null;
+    var bp = BASE && BASE[0] && BASE[0].printed; if (sv.basePrinted && bp && bp > sv.basePrinted) { await idbSet("dataset"); return null; }
+    return { arr: sv.arr, info: { sumber: "lokal", at: sv.at, by: sv.by } };
+  }
+  function pasangDataset(arr, info) {
+    RAW = arr; D = X.decode(arr); S.dsInfo = info || { sumber: "bawaan" }; dsId = (info && info.assetId) || null;
+    S.f = Object.assign({}, FILTER0); S.hal = 1; isiOpsi(); sinkronFilter();
+  }
+  function objDari(arr) {
+    var m = arr[0];
+    return arr.slice(1).map(function (r) { return { src: r[0], done: !!r[1], par: r[2], jenis: m.jenis[r[3]], ref1: r[4], ref2: r[5], grp: m.grp[r[6]], sub: m.sub[r[7]], kat: m.kat[r[8]], kode: r[9], nama: r[10], qty: r[11], alok: m.alok[r[12]], sup: m.sup[r[13]], harga: r[14], ppn: r[15], biaya: r[16], ppnb: r[17], nominal: r[18], tglPar: r[19], tglApp: r[20], tglPo: r[21], po: r[22], target: r[23], real: r[24], tglLpb: r[25], lpb: r[26], sel: r[27], ket: r[28], id: r[29] }; });
+  }
+  function hitungGabung() {
+    var files = U.files, baru = [], lama = objDari(RAW), st = { added: 0, changed: 0, same: 0, removed: 0, newDone: 0, superseded: 0, moved: 0 }, out;
+    if (U.json) {
+      out = objDari(U.json.arr); var bj = {}; lama.forEach(function (l) { var k = UP.mkey(l); (bj[k] = bj[k] || []).push(l); }); var cj = new Set();
+      out.forEach(function (n) { var o = (bj[UP.mkey(n)] || []).filter(function (x) { return !cj.has(x); })[0]; if (o) { cj.add(o); if (UP.sameLine(o, n)) st.same++; else st.changed++; } else { st.added++; if (n.done) st.newDone++; } });
+      st.removed = lama.length - cj.size;
+    }
+    else {
+      files.forEach(function (f) { Array.prototype.push.apply(baru, f.lines); });
+      var keep = [], pool = [], taken = {};
+      if (U.mode === "semua") pool = lama;
+      else { var sc = {}; files.forEach(function (f) { if (f.kind != null) sc[f.src + "|" + f.kind] = 1; }); lama.forEach(function (l) { (sc[l.src + "|" + (l.done ? 1 : 0)] ? pool : keep).push(l); }); }
+      lama.forEach(function (l) { taken[l.id] = 1; });
+      var by = {}; pool.forEach(function (l) { var k = UP.mkey(l); (by[k] = by[k] || []).push(l); });
+      var uid = function (n) { var b = UP.mkey(n).replace(/\//g, "-"), id = b, i = 1; while (taken[id]) id = b + "~" + (++i); taken[id] = 1; return id; };
+      var cocok = new Set(); out = keep.slice();
+      baru.forEach(function (n) {
+        var o = (by[UP.mkey(n)] || []).filter(function (x) { return !cocok.has(x); })[0];
+        if (o) { cocok.add(o); n.id = o.id; if (UP.sameLine(o, n)) st.same++; else st.changed++; }
+        else { st.added++; if (n.done) st.newDone++; n.id = uid(n); }
+        out.push(n);
+      });
+      st.removed = pool.length - cocok.size;
+      var pend = {}; keep.forEach(function (l) { if (!l.done) { var k = UP.twin(l); (pend[k] = pend[k] || []).push(l); } });
+      var buang = new Set();
+      baru.forEach(function (n) { if (n.done) { var a = pend[UP.twin(n)]; if (a && a.length) { buang.add(a.shift()); st.superseded++; } } });
+      out = out.filter(function (l) { return !buang.has(l); });
+    }
+    var seen = {}; out = out.filter(function (l) { if (seen[l.id]) return false; seen[l.id] = 1; return true; });
+    /* barang yang pindah dari belum selesai ke selesai berganti id: catat supaya centang penerimaan ikut pindah */
+    var idBaru = {}; out.forEach(function (l) { idBaru[l.id] = 1; });
+    var lamaId = {}; lama.forEach(function (l) { lamaId[l.id] = 1; });
+    var tw = {}; out.forEach(function (l) { if (!lamaId[l.id]) { var k = UP.twin(l); (tw[k] = tw[k] || []).push(l); } });
+    var peta = []; lama.forEach(function (o) { if (!idBaru[o.id]) { var a = tw[UP.twin(o)]; if (a && a.length) peta.push([o.id, a.shift().id]); } });
+    st.moved = peta.length; st.added = Math.max(0, st.added - peta.length);
+    var pars = {}; out.forEach(function (l) { pars[l.par] = 1; });
+    return { out: out, st: st, peta: peta, total: out.length, pars: Object.keys(pars).length };
+  }
+  function ulangGabung() {
+    U.files.forEach(UP.buatFile || UP.buildFile);
+    if (!U.touched) U.mode = U.files.length && U.files.every(function (f) { return f.kind != null; }) ? "laporan" : "semua";
+    if (U.mode === "laporan" && !U.files.every(function (f) { return f.kind != null; })) U.mode = "semua";
+    U.merge = U.json || U.files.some(function (f) { return f.lines.length; }) ? hitungGabung() : null;
+  }
+  function kendala() {
+    var b = [], kode = (RAW[0].branch || "").split(" - ")[0];
+    if (U.json) { var jb = (U.json.arr[0].branch || "").split(" - ")[0]; if (jb && kode && jb !== kode) b.push("Cabang pada data.json (" + U.json.arr[0].branch + ") berbeda dengan data aplikasi (" + RAW[0].branch + ")."); return b; }
+    U.files.forEach(function (f) { var bc = (f.meta.branch || "").split(" - ")[0]; if (bc && kode && bc !== kode && U.mode !== "semua") b.push(f.name + ": cabang " + f.meta.branch + " berbeda dengan data aplikasi (" + RAW[0].branch + "). Pilih \"Ganti semua data\" bila memang ingin mengganti cabang."); });
+    if (U.mode === "laporan") { var per = {}; U.files.forEach(function (f) { if (f.kind != null) (per[f.src] = per[f.src] || {})[f.kind] = 1; }); Object.keys(per).forEach(function (k) { if (Object.keys(per[k]).length === 1) b.push("Untuk sumber " + UP.SRC[k] + " hanya satu laporan (" + (per[k][1] ? "Selesai" : "Belum selesai") + ") yang dipilih. Unggah juga pasangannya agar barang yang baru diterima tidak dobel."); }); }
+    return b;
+  }
+  async function bacaBerkas(list) {
+    U.busy = true; U.msg = "Membaca berkas…"; U.result = null; renderData();
+    for (var i = 0; i < list.length; i++) {
+      var f = list[i];
+      try {
+        var head = new Uint8Array(await f.slice(0, 4).arrayBuffer());
+        if (/\.json$/i.test(f.name) || head[0] === 0x5b) {
+          var arr = JSON.parse(await f.text());
+          if (!Array.isArray(arr) || arr.length < 2 || !arr[0] || !arr[0].branch || !Array.isArray(arr[1]) || arr[1].length < 30) throw new Error("Bukan data.json aplikasi ini. Gunakan data.json yang diunduh dari aplikasi Monitoring LPB atau dari menu ini.");
+          U.json = { name: f.name, arr: arr }; U.files = [];
+        } else { if (U.json) U.json = null; U.files.push(await UP.readUpload(f)); }
+      } catch (e) { U.errs.push({ name: f.name, msg: e && e.message || String(e) }); }
+    }
+    U.busy = false; U.msg = ""; U.ack = false; ulangGabung(); renderData();
+  }
+  var tglInfo = function (iso) { return iso ? X.fmtTgl(X.tgl(String(iso).slice(0, 10))) : "-"; };
+  function renderData() {
+    var el = $("#dataIsi"); if (!el || !Auth.isAdmin() || !RAW) return;
+    var m = RAW[0], info = S.dsInfo || { sumber: "bawaan" }, mg = U.merge, kd = mg ? kendala() : [], R = U.result;
+    var sumberTxt = info.sumber === "bersama" ? "Hasil unggahan, tersimpan bersama (" + tglInfo(info.at) + (info.by ? ", oleh " + esc(info.by) : "") + ")" : info.sumber === "lokal" ? "Hasil unggahan, tersimpan di browser ini (" + tglInfo(info.at) + (info.by ? ", oleh " + esc(info.by) : "") + ")" : "Data bawaan aplikasi";
+    var pars = {}; RAW.slice(1).forEach(function (r) { pars[r[2]] = 1; });
+    var h = '<div class="stack"><section class="card"><div class="hd"><div><h2>Data yang sedang dipakai</h2><p class="note">' + sumberTxt + "</p></div></div>" +
+      '<dl class="kv"><dt>Cabang</dt><dd>' + esc(m.branch) + "</dd><dt>Periode</dt><dd>" + esc(m.periode) + "</dd><dt>Dicetak</dt><dd>" + tglInfo(m.printed) + "</dd><dt>Isi</dt><dd>" + nf.format(RAW.length - 1) + " item dari " + nf.format(Object.keys(pars).length) + " PAR</dd></dl>" +
+      '<div class="form-act"><button class="btn" id="dlJson">Unduh data.json</button><button class="btn" id="dlJs">Unduh data.js (untuk GitHub)</button>' + (info.sumber !== "bawaan" ? '<button class="btn bahaya' + (S.resetYakin ? " yakin" : "") + '" id="btnResetData">' + (S.resetYakin ? "Yakin kembali ke data bawaan?" : "Kembali ke data bawaan") + "</button>" : "") + "</div></section>";
+    h += '<section class="card"><div class="hd"><div><h2>Unggah laporan baru</h2><p class="note">Pilih laporan PAR dari sistem apa adanya (.xls, .xlsx, atau .csv), boleh beberapa berkas sekaligus, misalnya laporan Selesai dan Belum Selesai untuk tiap sumber. Bisa juga memakai data.json. Data baru baru dipakai setelah Anda memeriksa pratinjau dan menekan Terapkan.</p></div></div>' +
+      '<label class="drop" id="upDrop" for="upFile"><b>Pilih berkas atau seret ke sini</b><span>' + (U.busy ? esc(U.msg || "Memproses…") : "Laporan mentah .xls, .xlsx, .csv, atau data.json") + '</span></label><input class="sr" id="upFile" type="file" multiple accept=".xls,.xlsx,.csv,.txt,.html,.htm,.json" ' + (U.busy ? "disabled" : "") + ">";
+    if (R) h += '<p class="msg ' + (R.err ? "bad" : "good") + '" role="status" style="margin-top:12px">' + esc(R.teks) + "</p>";
+    if (U.errs.length) h += '<div class="up-list">' + U.errs.map(function (e) { return '<div class="up-file up-bad"><b>' + esc(e.name) + "</b><div>" + esc(e.msg) + "</div></div>"; }).join("") + "</div>";
+    if (U.json) h += '<div class="up-list"><div class="up-file"><b>' + esc(U.json.name) + '</b><div class="xs mute">data.json · ' + nf.format(U.json.arr.length - 1) + " baris · dicetak " + tglInfo(U.json.arr[0].printed) + "</div></div></div>";
+    else if (U.files.length) h += '<div class="up-list">' + U.files.map(function (f, i) {
+      var det = f.errors.concat(f.warns.map(function (w) { return { r: w.r, par: w.par, m: "Peringatan: " + w.m }; }));
+      return '<div class="up-file"><div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap"><b>' + esc(f.name) + '</b><button class="btn sm" data-up-hapus="' + i + '">Buang</button></div><div class="xs mute">' + (f.meta.report ? "Laporan mentah · " + (f.kind ? "Selesai" : "Belum selesai") + " · " + UP.SRC[f.src] + (f.meta.printed ? " · dicetak " + tglInfo(f.meta.printed) : "") : "Template, CSV, atau xlsx · " + UP.SRC[f.src]) + " · " + nf.format(f.lines.length) + " baris terbaca" + (f.errors.length ? ' · <span class="up-bad">' + nf.format(f.errors.length) + " baris ditolak</span>" : "") + (f.warns.length ? " · " + nf.format(f.warns.length) + " peringatan" : "") + "</div>" +
+        (det.length ? "<details><summary>Lihat catatan</summary><ul>" + det.slice(0, 8).map(function (d) { return "<li>Baris " + d.r + (d.par ? " (" + esc(d.par) + ")" : "") + ": " + esc(d.m) + "</li>"; }).join("") + (det.length > 8 ? "<li>… dan " + (det.length - 8) + " lainnya</li>" : "") + "</ul></details>" : "") + "</div>";
+    }).join("") + "</div>";
+    if (mg) {
+      var st = mg.st;
+      if (!U.json) h += '<p class="note" style="margin-top:14px"><b>Cara menerapkan</b></p><label class="up-opt' + (U.mode === "laporan" ? " on" : "") + '"><input type="radio" name="upMode" value="laporan" ' + (U.mode === "laporan" ? "checked" : "") + (U.files.every(function (f) { return f.kind != null; }) ? "" : " disabled") + '><span><b>Perbarui per laporan</b><small>Hanya data pada sumber dan status yang sama dengan berkas diganti. Data lain tetap. Cocok untuk update rutin.</small></span></label><label class="up-opt' + (U.mode === "semua" ? " on" : "") + '"><input type="radio" name="upMode" value="semua" ' + (U.mode === "semua" ? "checked" : "") + '><span><b>Ganti semua data</b><small>Seluruh data lama diganti isi berkas ini. Pastikan semua laporan sudah ikut dipilih.</small></span></label>';
+      h += '<div class="up-stats"><div><b class="num">' + nf.format(st.added) + "</b><span>baru</span></div><div><b class=\"num\">" + nf.format(st.changed) + "</b><span>berubah</span></div><div><b class=\"num\">" + nf.format(st.same) + "</b><span>sama</span></div><div><b class=\"num\">" + nf.format(st.removed + st.superseded) + "</b><span>dihapus</span></div><div><b class=\"num\">" + nf.format(st.moved) + "</b><span>pindah ke selesai</span></div><div><b class=\"num\">" + nf.format(mg.total) + "</b><span>total " + nf.format(mg.pars) + " PAR</span></div></div>";
+      if (kd.length) h += '<ul class="up-bad">' + kd.map(function (k) { return "<li>" + esc(k) + "</li>"; }).join("") + "</ul>";
+      h += '<label class="chk"><input type="checkbox" id="upAck" ' + (U.ack ? "checked" : "") + "> Saya sudah memeriksa pratinjau di atas</label>" +
+        '<label class="field" for="upBy" style="margin-top:10px">Diunggah oleh (opsional)<input id="upBy" value="' + esc(U.by || Auth.me().name) + '" maxlength="40"></label>' +
+        '<div class="form-act"><button class="btn pri" id="upApply" ' + (U.ack && !kd.some(function (k) { return /berbeda dengan data aplikasi/.test(k); }) && !U.busy ? "" : "disabled") + ">Terapkan data baru</button><button class=\"btn\" id=\"upBatal\">Batal</button></div>";
+    }
+    el.innerHTML = h + "</section>" + kartuGh() + "</div>";
+  }
+  async function terapkanData() {
+    var m = U.merge; if (!m || U.busy) return;
+    var by = ($("#upBy").value || "").trim().slice(0, 40); U.by = by;
+    var printedBaru = U.files.map(function (f) { return f.meta.printed; }).filter(Boolean).sort().pop(), lamaM = RAW[0];
+    var meta = U.json ? U.json.arr[0] : { branch: (U.mode === "semua" && U.files.map(function (f) { return f.meta.branch; }).filter(Boolean)[0]) || lamaM.branch, printed: (U.mode === "semua" || !lamaM.printed || (printedBaru && printedBaru > lamaM.printed)) ? (printedBaru || lamaM.printed) : lamaM.printed, periode: U.files.map(function (f) { return f.meta.periode; }).filter(Boolean)[0] || lamaM.periode };
+    var arr = U.json ? U.json.arr : UP.encodeDataset(m.out, meta), info = { sumber: "lokal", at: new Date().toISOString(), by: by }, catatan = "";
+    U.busy = true; U.msg = "Menerapkan data…"; renderData();
+    try {
+      if (Auth.mode === "db" && Auth.db() && assetsH) {
+        var up = await assetsH.upload(new Blob([JSON.stringify(arr)], { type: "application/json" }));
+        await Auth.db().collection("config").doc("dataset").set({ assetId: up.id, ts: info.at, by: by, rows: m.total, par: m.pars, branch: meta.branch, printed: meta.printed, periode: meta.periode });
+        info = { sumber: "bersama", at: info.at, by: by, assetId: up.id };
+      } else {
+        await idbSet("dataset", { arr: arr, basePrinted: (BASE[0] && BASE[0].printed) || "", at: info.at, by: by });
+        if (Auth.mode === "db") catatan = " Penyimpanan bersama tidak tersedia, jadi data hanya tersimpan di browser ini.";
+      }
+    } catch (e) { U.busy = false; U.msg = ""; U.result = { err: true, teks: "Data tidak bisa disimpan (" + (e && e.message || e) + "). Data lama tetap dipakai." }; renderData(); return; }
+    pasangDataset(arr, info);
+    var pindah = 0;
+    for (var i = 0; i < m.peta.length; i++) {
+      var rec = TR(m.peta[i][0]);
+      if (rec && (rec.g || rec.k || rec.gp || rec.kp) && !(TR(m.peta[i][1]).g || TR(m.peta[i][1]).k)) {
+        try { await Auth.terimaSet(m.peta[i][1], { g: rec.g || null, k: rec.k || null, gp: rec.gp || null, kp: rec.kp || null }); await Auth.terimaSet(m.peta[i][0], { g: null, k: null, gp: null, kp: null }); pindah++; } catch (e) {}
+      }
+    }
+    var st = m.st, gh = ghAwal(), ghTeks = "", ghErr = false;
+    if (Auth.mode !== "db" && gh.auto && gh.token && gh.owner && gh.repo) {
+      U.msg = "Menerbitkan ke GitHub…"; renderData();
+      try { ghTeks = " Sudah diterbitkan ke GitHub (" + await ghTerbit(arr, "unggah") + "), situs ikut berubah dalam 1 sampai 2 menit."; } catch (x) { ghErr = true; ghTeks = " Gagal menerbitkan ke GitHub: " + (x.message || x) + " Data tetap dipakai di browser ini, coba lagi dengan tombol Terbitkan data sekarang."; }
+    }
+    U.result = { err: ghErr, teks: "Data diperbarui: " + nf.format(st.added) + " baru, " + nf.format(st.changed) + " berubah, " + nf.format(st.removed + st.superseded) + " dihapus, total " + nf.format(m.total) + " item." + (pindah ? " " + nf.format(pindah) + " centang penerimaan ikut dipindah." : "") + catatan + ghTeks };
+    U.files = []; U.errs = []; U.json = null; U.merge = null; U.ack = false; U.touched = false; U.busy = false; U.msg = "";
+    S.sla = S.sla; renderSemua(); renderAlarmBar(); renderData();
+  }
+  async function kembaliBawaan() {
+    try {
+      if (Auth.mode === "db" && Auth.db()) await Auth.db().collection("config").doc("dataset")["delete"]();
+      else await idbSet("dataset");
+    } catch (e) { U.result = { err: true, teks: "Gagal mengembalikan data bawaan: " + (e && e.message || e) }; renderData(); return; }
+    pasangDataset(BASE, { sumber: "bawaan" }); S.resetYakin = false; U.result = { err: false, teks: "Kembali memakai data bawaan aplikasi." };
+    renderSemua(); renderAlarmBar(); renderData();
+  }
+  /* ---------- terbitkan otomatis ke GitHub (tanpa membuka situs GitHub) ---------- */
+  var jsonTeks = function (a) { return "[\n" + a.map(function (r) { return JSON.stringify(r); }).join(",\n") + "\n]\n"; };
+  var jsTeks = function (a) { return "/* Data pengadaan. Dibuat dari menu Unggah Data. */\nwindow.PSLA_DATA=" + JSON.stringify(a) + ";\n"; };
+  function ghAwal() {
+    var g = Object.assign({ owner: "", repo: "", branch: "main", token: "", auto: true }, ls.get("psla-gh", {}));
+    if (!g.owner || !g.repo) { var m = /^([^.]+)\.github\.io$/i.exec(location.hostname), seg = location.pathname.split("/")[1]; if (m) { g.owner = g.owner || m[1]; g.repo = g.repo || seg || (m[1] + ".github.io"); } }
+    return g;
+  }
+  var b64 = function (str) { var u = new TextEncoder().encode(str), out = "", n = 0x8000; for (var i = 0; i < u.length; i += n) out += String.fromCharCode.apply(null, u.subarray(i, i + n)); return btoa(out); };
+  async function ghApi(g, path, opt) {
+    var r = await fetch("https://api.github.com/repos/" + encodeURIComponent(g.owner) + "/" + encodeURIComponent(g.repo) + path, Object.assign({ headers: { Authorization: "Bearer " + g.token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" } }, opt || {}, opt && opt.body ? { headers: { Authorization: "Bearer " + g.token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json" } } : {}));
+    if (r.ok) return r.status === 204 ? null : r.json();
+    var msg = r.status === 401 ? "Token ditolak (kedaluwarsa atau salah)." : r.status === 403 ? "Token tidak punya izin menulis (butuh Contents: Read and write) atau terkena batas GitHub." : r.status === 404 ? "Repositori, cabang, atau berkas tidak ditemukan. Cek pemilik, nama repositori, dan izin token." : r.status === 409 || r.status === 422 ? "Berkas di GitHub berubah saat ditulis. Coba lagi." : "GitHub menjawab " + r.status + ".";
+    var e = new Error(msg); e.status = r.status; throw e;
+  }
+  async function ghTulis(g, path, teks, pesan) {
+    var sha = null;
+    try { var cur = await ghApi(g, "/contents/" + path + "?ref=" + encodeURIComponent(g.branch)); sha = cur && cur.sha; } catch (e) { if (e.status !== 404) throw e; }
+    var body = { message: pesan, content: b64(teks), branch: g.branch }; if (sha) body.sha = sha;
+    await ghApi(g, "/contents/" + path, { method: "PUT", body: JSON.stringify(body) });
+  }
+  async function ghTerbit(arr, ket) {
+    var g = ghAwal(); if (!g.token || !g.owner || !g.repo) throw new Error("Sambungan GitHub belum diisi.");
+    var pesan = "Perbarui data pengadaan" + (ket ? " (" + ket + ")" : "") + " per " + tglInfo(arr[0].printed);
+    await ghTulis(g, "data/data.json", jsonTeks(arr), pesan);
+    await ghTulis(g, "data/data.js", jsTeks(arr), pesan);
+    return g.owner + "/" + g.repo;
+  }
+  function kartuGh() {
+    if (Auth.mode === "db") return '<section class="card"><div class="hd"><div><h2>Pembaruan otomatis</h2><p class="note">Di claude.ai data yang Anda terapkan langsung dipakai semua pengguna. Tidak perlu membuka GitHub.</p></div></div></section>';
+    var g = ghAwal(), ok = !!(g.token && g.owner && g.repo);
+    return '<section class="card"><div class="hd"><div><h2>Terbitkan otomatis ke GitHub</h2><p class="note">' + (ok ? "Tersambung ke " + esc(g.owner + "/" + g.repo) + ". " + (g.auto ? "Setiap data diterapkan langsung diterbitkan, dan situs GitHub Pages ikut berubah dalam 1 sampai 2 menit." : "Penerbitan otomatis mati, gunakan tombol Terbitkan data sekarang.") : "Isi sekali, lalu tiap kali Anda menerapkan data baru, aplikasi sendiri yang memperbarui berkas data di GitHub. Anda tidak perlu membuka GitHub.") + "</p></div></div>" +
+      '<form id="formGh" autocomplete="off"><div class="form-grid"><label class="field" for="ghOwner">Pemilik (akun atau organisasi)<input id="ghOwner" value="' + esc(g.owner) + '" required></label><label class="field" for="ghRepo">Nama repositori<input id="ghRepo" value="' + esc(g.repo) + '" required></label><label class="field" for="ghBranch">Cabang<input id="ghBranch" value="' + esc(g.branch) + '" required></label>' +
+      '<label class="field" for="ghToken">Token akses GitHub' + (ok ? " (tersimpan, kosongkan bila tidak diganti)" : "") + '<input id="ghToken" type="password" autocomplete="new-password" placeholder="' + (ok ? "••••••••" : "github_pat_…") + '"' + (ok ? "" : " required") + "></label></div>" +
+      '<label class="chk"><input type="checkbox" id="ghAuto" ' + (g.auto ? "checked" : "") + "> Terbitkan otomatis setiap data baru diterapkan</label>" +
+      '<div class="form-act"><button class="btn pri" type="submit">Simpan sambungan</button>' + (ok ? '<button class="btn" type="button" id="ghUji">Uji sambungan</button><button class="btn" type="button" id="ghNow">Terbitkan data sekarang</button><button class="btn bahaya" type="button" id="ghPutus">Putuskan</button>' : "") + "</div></form>" +
+      (S.ghMsg ? '<p class="msg ' + S.ghMsg.tone + '" role="status">' + esc(S.ghMsg.t) + "</p>" : "") +
+      '<details class="xs mute" style="margin-top:10px"><summary>Cara membuat token (sekali saja)</summary><ol><li>Di GitHub: Settings, Developer settings, Personal access tokens, Fine-grained tokens, Generate new token.</li><li>Repository access: pilih hanya repositori aplikasi ini.</li><li>Permissions: Contents = Read and write. Pilih masa berlaku, lalu salin tokennya ke kolom di atas.</li></ol><p>Token hanya disimpan di browser ini, tidak ikut cadangan atau unduhan, dan tidak pernah dikirim ke tempat lain selain GitHub. Pakai token khusus repositori ini dan jaga repositori tetap Private.</p></details></section>';
+  }
+  function pasangGh() {
+    document.addEventListener("submit", function (e) {
+      if (e.target.id !== "formGh") return; e.preventDefault();
+      var g0 = ghAwal(), tk = $("#ghToken").value.trim() || g0.token;
+      var g = { owner: $("#ghOwner").value.trim(), repo: $("#ghRepo").value.trim(), branch: $("#ghBranch").value.trim() || "main", token: tk, auto: $("#ghAuto").checked };
+      if (!/^[A-Za-z0-9._-]+$/.test(g.owner) || !/^[A-Za-z0-9._-]+$/.test(g.repo)) { S.ghMsg = { t: "Pemilik dan nama repositori hanya boleh huruf, angka, titik, minus, dan garis bawah.", tone: "bad" }; renderData(); return; }
+      ls.set("psla-gh", g); S.ghMsg = { t: "Sambungan disimpan.", tone: "good" }; renderData();
+    });
+    document.addEventListener("click", async function (e) {
+      var t = e.target, g;
+      if (t.closest("#ghPutus")) { ls.set("psla-gh", {}); S.ghMsg = { t: "Sambungan diputus dan token dihapus dari browser ini.", tone: "good" }; renderData(); return; }
+      if (t.closest("#ghUji")) {
+        g = ghAwal(); S.ghMsg = { t: "Menguji…", tone: "" }; renderData();
+        try { var inf = await ghApi(g, ""); S.ghMsg = inf && inf.permissions && inf.permissions.push === false ? { t: "Terhubung, tetapi token hanya bisa membaca. Beri izin Contents: Read and write.", tone: "bad" } : { t: "Berhasil terhubung ke " + g.owner + "/" + g.repo + ".", tone: "good" }; } catch (x) { S.ghMsg = { t: x.message || "Gagal menghubungi GitHub.", tone: "bad" }; }
+        renderData(); return;
+      }
+      if (t.closest("#ghNow")) {
+        S.ghMsg = { t: "Menerbitkan…", tone: "" }; renderData();
+        try { var rp = await ghTerbit(RAW, "manual"); S.ghMsg = { t: "Data diterbitkan ke " + rp + ". Situs GitHub Pages ikut berubah dalam 1 sampai 2 menit.", tone: "good" }; } catch (x) { S.ghMsg = { t: "Gagal menerbitkan: " + (x.message || x), tone: "bad" }; }
+        renderData(); return;
+      }
+    });
+  }
+  function pasangData() {
+    pasangGh();
+    document.addEventListener("change", function (e) {
+      var t = e.target;
+      if (t.id === "upFile") { var fl = Array.from(t.files || []); t.value = ""; if (fl.length) bacaBerkas(fl); return; }
+      if (t.name === "upMode") { U.mode = t.value; U.touched = true; U.ack = false; U.merge = hitungGabung(); renderData(); return; }
+      if (t.id === "upAck") { U.ack = t.checked; var b = $("#upApply"); if (b) b.disabled = !(U.ack && !kendala().some(function (k) { return /berbeda dengan data aplikasi/.test(k); })); return; }
+    });
+    document.addEventListener("click", function (e) {
+      var t = e.target, el;
+      if (t.closest("#upApply")) { terapkanData(); return; }
+      if (t.closest("#upBatal")) { U.files = []; U.errs = []; U.json = null; U.merge = null; U.ack = false; U.touched = false; renderData(); return; }
+      if ((el = t.closest("[data-up-hapus]"))) { U.files.splice(+el.dataset.upHapus, 1); U.ack = false; ulangGabung(); renderData(); return; }
+      if (t.closest("#dlJson")) { simpanBerkas("data.json", "[\n" + RAW.map(function (r) { return JSON.stringify(r); }).join(",\n") + "\n]\n", "application/json"); return; }
+      if (t.closest("#dlJs")) { simpanBerkas("data.js", "/* Data pengadaan. Dibuat dari menu Unggah Data. */\nwindow.PSLA_DATA=" + JSON.stringify(RAW) + ";\n", "text/javascript"); return; }
+      if (t.closest("#btnResetData")) { if (!S.resetYakin) { S.resetYakin = true; renderData(); setTimeout(function () { if (S.resetYakin) { S.resetYakin = false; if (S.page === "data") renderData(); } }, 4000); } else kembaliBawaan(); return; }
+    });
+    ["dragover", "dragleave", "drop"].forEach(function (n) {
+      document.addEventListener(n, function (e) {
+        var d = e.target.closest && e.target.closest("#upDrop"); if (!d) return;
+        e.preventDefault(); d.classList.toggle("over", n === "dragover");
+        if (n === "drop" && e.dataTransfer && e.dataTransfer.files.length && !U.busy) bacaBerkas(Array.from(e.dataTransfer.files));
+      });
+    });
+  }
+
   /* ---------- mulai ---------- */
   async function muat() {
     var arr = window.PSLA_DATA;
     if (!arr) { var r = await fetch(DATA_URL); if (!r.ok) throw new Error("HTTP " + r.status); arr = await r.json(); }
-    return X.decode(arr);
+    return arr;
   }
-  Promise.all([muat(), Auth.init()]).then(function (hasil) {
-    D = hasil[0]; $("#muat").hidden = true; isiOpsi(); sinkronAtur(); pasang(); pasangAkun();
+  Promise.all([muat(), Auth.init()]).then(async function (hasil) {
+    BASE = hasil[0]; var sv = null;
+    try { if (window.claude && claude.use) assetsH = await claude.use("assets"); } catch (e) { assetsH = null; }
+    try { sv = await muatTersimpan(false); } catch (e) { sv = null; }
+    pasangDataset(sv ? sv.arr : BASE, sv ? sv.info : null);
+    $("#muat").hidden = true; sinkronAtur(); pasang(); pasangAkun(); pasangData();
     if (Auth.me()) masuk(false); else tampilLogin();
   }).catch(function (e) {
     document.body.classList.remove("locked"); $("#muat").hidden = false;

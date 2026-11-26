@@ -205,7 +205,7 @@
       if (baru === lama) throw gagal("Password baru harus berbeda dari yang lama.");
       var h = await bikinHash(baru); await simpan(Object.assign({}, a, { salt: h.salt, hash: h.hash, it: h.it, must: false, weak: false }));
     },
-    cfgGet: cfgGet, cfgSet: cfgSet,
+    cfgGet: cfgGet, cfgSet: cfgSet, db: function () { return db; },
     terimaMuat: terimaMuat, terimaSet: terimaSet, terimaAll: function () { return terima; },
     /* cadangan akun untuk dipindah antar perangkat (mode browser) */
     ekspor: function (cfg) { return JSON.stringify({ app: "purchasing-sla-monitor", v: 1, at: new Date().toISOString(), accounts: Array.from(map.values()), cfg: cfg || null, terima: mode === "local" ? lsGet(KEY_TRM, {}) : null }); },
